@@ -1,0 +1,31 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Kontoen er allerede konfigurert",
+            "cannot_connect": "Tilkobling mislyktes",
+            "reauth_successful": "Autentisering p\u00e5 nytt var vellykket",
+            "unknown": "Uventet feil"
+        },
+        "error": {
+            "cannot_connect": "Tilkobling mislyktes",
+            "invalid_auth": "Ugyldig godkjenning",
+            "unknown": "Uventet feil"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "password": "Passord",
+                    "region": "Region",
+                    "username": "Brukernavn"
+                }
+            }
+        }
+    },
+    "selector": {
+        "region": {
+            "options": {
+                "europe": "Europa"
+            }
+        }
+    }
+}

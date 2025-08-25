@@ -1,0 +1,18 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "data": {
+                    "region": "Re\u0123ions"
+                }
+            }
+        }
+    },
+    "selector": {
+        "region": {
+            "options": {
+                "europe": "Eiropa"
+            }
+        }
+    }
+}

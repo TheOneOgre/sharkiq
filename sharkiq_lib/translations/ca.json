@@ -1,0 +1,47 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "El compte ja est\u00e0 configurat",
+            "cannot_connect": "Ha fallat la connexi\u00f3",
+            "reauth_successful": "Re-autenticaci\u00f3 realitzada correctament",
+            "unknown": "Error inesperat"
+        },
+        "error": {
+            "cannot_connect": "Ha fallat la connexi\u00f3",
+            "invalid_auth": "Autenticaci\u00f3 inv\u00e0lida",
+            "unknown": "Error inesperat"
+        },
+        "step": {
+            "reauth_confirm": {
+                "data": {
+                    "password": "Contrasenya",
+                    "region": "Regi\u00f3",
+                    "username": "Nom d'usuari"
+                }
+            },
+            "user": {
+                "data": {
+                    "password": "Contrasenya",
+                    "region": "Regi\u00f3",
+                    "username": "Nom d'usuari"
+                }
+            }
+        }
+    },
+    "selector": {
+        "region": {
+            "options": {
+                "europe": "Europa"
+            }
+        }
+    },
+    "services": {
+        "clean_room": {
+            "fields": {
+                "rooms": {
+                    "name": "Habitacions"
+                }
+            }
+        }
+    }
+}

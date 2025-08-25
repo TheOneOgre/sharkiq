@@ -1,0 +1,42 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Tili on jo m\u00e4\u00e4ritetty",
+            "cannot_connect": "Yhteyden muodostaminen ep\u00e4onnistui",
+            "reauth_successful": "Uudelleentodennus onnistui",
+            "unknown": "Odottamaton virhe"
+        },
+        "error": {
+            "cannot_connect": "Yhteyden muodostaminen ep\u00e4onnistui",
+            "invalid_auth": "Virheellinen todennus",
+            "unknown": "Odottamaton virhe"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "password": "Salasana",
+                    "region": "Alue",
+                    "username": "K\u00e4ytt\u00e4j\u00e4tunnus"
+                }
+            }
+        }
+    },
+    "selector": {
+        "region": {
+            "options": {
+                "europe": "Eurooppa"
+            }
+        }
+    },
+    "services": {
+        "clean_room": {
+            "description": "Puhdistaa tietyn k\u00e4ytt\u00e4j\u00e4n m\u00e4\u00e4rittelem\u00e4n huoneen tai huoneiden joukon.",
+            "fields": {
+                "rooms": {
+                    "description": "Luettelo siivottavista huoneista",
+                    "name": "Huoneet"
+                }
+            }
+        }
+    }
+}

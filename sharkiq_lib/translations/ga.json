@@ -1,0 +1,28 @@
+{
+    "config": {
+        "step": {
+            "reauth_confirm": {
+                "data": {
+                    "region": "R\u00e9igi\u00fan"
+                }
+            }
+        }
+    },
+    "exceptions": {
+        "invalid_room": {
+            "message": "N\u00edl an seomra {room} ar f\u00e1il do do fhol\u00fasghlant\u00f3ir. Cinntigh go bhfuil na seomra\u00ed uile ag teacht leis an aip SharkClean, lena n-\u00e1ir\u00edtear pr\u00edomhlitreacha."
+        }
+    },
+    "services": {
+        "clean_room": {
+            "description": "Glanann s\u00e9 seomra n\u00f3 sraith seomra\u00ed ar leith at\u00e1 sainithe ag an \u00fas\u00e1ideoir.",
+            "fields": {
+                "rooms": {
+                    "description": "Liosta seomra\u00ed le glanadh",
+                    "name": "Seomra\u00ed"
+                }
+            },
+            "name": "Seomra glan"
+        }
+    }
+}

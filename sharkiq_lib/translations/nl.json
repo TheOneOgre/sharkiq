@@ -1,0 +1,48 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Account is al geconfigureerd",
+            "cannot_connect": "Kan geen verbinding maken",
+            "reauth_successful": "Herauthenticatie geslaagd",
+            "unknown": "Onverwachte fout"
+        },
+        "error": {
+            "cannot_connect": "Kan geen verbinding maken",
+            "invalid_auth": "Ongeldige authenticatie",
+            "unknown": "Onverwachte fout"
+        },
+        "step": {
+            "reauth_confirm": {
+                "data": {
+                    "password": "Wachtwoord",
+                    "region": "Regio",
+                    "username": "Gebruikersnaam"
+                }
+            },
+            "user": {
+                "data": {
+                    "password": "Wachtwoord",
+                    "region": "Regio",
+                    "username": "Gebruikersnaam"
+                }
+            }
+        }
+    },
+    "selector": {
+        "region": {
+            "options": {
+                "europe": "Europa"
+            }
+        }
+    },
+    "services": {
+        "clean_room": {
+            "fields": {
+                "rooms": {
+                    "description": "Lijst van kamers om schoon te maken",
+                    "name": "Kamers"
+                }
+            }
+        }
+    }
+}

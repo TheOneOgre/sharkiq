@@ -1,0 +1,9 @@
+{
+  "domain": "sharkiq_lib",
+  "name": "Shark IQ2",
+  "version": "0.0.1",
+  "documentation": "https://example.com",
+  "codeowners": ["@theogre"],
+  "config_flow": true,
+  "requirements": ["auth0-python"]
+}
