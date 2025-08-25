@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 
-from .sharkiq_lib.ayla_api import (
+from sharkiq import (
     AylaApi,
     SharkIqAuthError,
     SharkIqAuthExpiringError,
