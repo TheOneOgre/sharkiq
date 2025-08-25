@@ -1,4 +1,5 @@
 """Various constants"""
+import logging
 
 AUTH0_URL = "https://login.sharkninja.com"
 AUTH0_HOST = "login.sharkninja.com"
@@ -20,3 +21,4 @@ EU_DEVICE_URL = "https://ads-eu.aylanetworks.com"
 EU_LOGIN_URL = "https://user-field-eu.aylanetworks.com"
 EU_SHARK_APP_ID = "android_shark_prod-lg-id"
 EU_SHARK_APP_SECRET = "android_shark_prod-xuf9mlHOo0p3Ty5bboFROSyRBlE"
+LOGGER = logging.getLogger(__package__)
