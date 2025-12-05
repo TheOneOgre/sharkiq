@@ -12,7 +12,7 @@ from .const import DEVICE_URL, EU_DEVICE_URL
 from .exc import SharkIqReadOnlyPropertyError
 
 try:
-    import ujson as json
+    import json as json
 except ImportError:
     import json
 

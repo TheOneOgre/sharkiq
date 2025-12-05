@@ -8,12 +8,17 @@ found at:
 """
 
 import aiohttp
+import base64
+import hashlib
+import json
+import secrets
+import urllib.parse
 import requests
 
 from auth0.authentication import GetToken
 from auth0.asyncify import asyncify
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from .auth0 import Auth0Client
 from .const import (
     DEVICE_URL,
@@ -24,6 +29,7 @@ from .const import (
     AUTH0_URL,
     AUTH0_TOKEN_URL,
     AUTH0_CLIENT_ID,
+    AUTH0_REDIRECT_URI,
     AUTH0_SCOPES,
     BROWSER_USERAGENT,
     EU_DEVICE_URL,
@@ -122,6 +128,11 @@ class AylaApi:
         self.europe = europe
         # Allow disabling SSL verification if the Ayla host presents a mismatched cert in some environments.
         self.verify_ssl = verify_ssl
+        # Flag set when Auth0 requires interactive verification (e.g., captcha/device check).
+        self._requires_interactive_login = False
+        # Persist a PKCE verifier for interactive flows if needed.
+        self._last_pkce_verifier = None
+        self._auth0_refresh_token = None  # type: Optional[str]
 
     async def ensure_session(self) -> aiohttp.ClientSession:
         """
@@ -205,6 +216,16 @@ class AylaApi:
             "User-Agent": BROWSER_USERAGENT
         }
 
+    @staticmethod
+    def _generate_pkce_pair() -> Tuple[str, str]:
+        """
+        Generate a PKCE verifier/challenge pair.
+        """
+        verifier = secrets.token_urlsafe(64)
+        digest = hashlib.sha256(verifier.encode("ascii")).digest()
+        challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+        return verifier, challenge
+
     def _set_credentials(self, status_code: int, login_result: Dict):
         """
         Update the internal credentials store.
@@ -233,6 +254,7 @@ class AylaApi:
         """
         if status_code == 401 and login_result["error"] == "requires_verification":
 
+            self._requires_interactive_login = True
             raise SharkIqAuthError(login_result["error_description"] + ". Auth request flagged for verification.")
         elif status_code == 401:
             raise SharkIqAuthError(login_result["error_description"] + ". Confirm credentials are correct.")
@@ -269,11 +291,22 @@ class AylaApi:
             ssl=self.verify_ssl,
             timeout=15,
         ) as resp:
+            raw_text = await resp.text()
+            try:
+                auth0_json = json.loads(raw_text)
+            except Exception:
+                auth0_json = None
+
+            if resp.status == 401 and isinstance(auth0_json, dict) and auth0_json.get("error") == "requires_verification":
+                self._requires_interactive_login = True
+                raise SharkIqAuthError(auth0_json.get("error_description", "Auth0 requires interactive verification"))
             if resp.status >= 400:
-                raise SharkIqAuthError(f"Auth0 password grant failed: {resp.status} {await resp.text()}")
-            auth0_json = await resp.json()
+                raise SharkIqAuthError(f"Auth0 password grant failed: {resp.status} {raw_text}")
+            if auth0_json is None:
+                auth0_json = await resp.json()
         if "id_token" not in auth0_json:
             raise SharkIqAuthError("Auth0 response missing id_token")
+        self._requires_interactive_login = False
         self._set_id_token(resp.status, auth0_json)
 
     async def _legacy_cookie_sign_in(self, ayla_client: aiohttp.ClientSession, force_auth0_sdk: bool = False):
@@ -299,27 +332,20 @@ class AylaApi:
                     self._password
                 )
                 self._auth0_id_token = auth_result["id_token"]
+            self._requires_interactive_login = False
         except Exception as err:
+            if "requires verification" in str(err).lower():
+                self._requires_interactive_login = True
+                raise SharkIqAuthError("Auth0 requires interactive verification") from err
             if not force_auth0_sdk:
                 # Retry with Auth0 SDK path as a last resort
                 return await self._legacy_cookie_sign_in(ayla_client, force_auth0_sdk=True)
             raise err
 
-    async def async_sign_in(self):
+    async def _ayla_token_sign_in(self, ayla_client: aiohttp.ClientSession):
         """
-        Authenticate to Ayla API asynchronously.
-
-        Attempts password grant first, then automatically falls back to the legacy cookie-based Auth0 flow.
+        Exchange the Auth0 id_token for Ayla credentials.
         """
-        ayla_client = await self.ensure_session()
-
-        try:
-            await self._password_grant_sign_in(ayla_client)
-        except Exception:
-            # Password grant failed; try legacy flow (will raise if it also fails)
-            await self._legacy_cookie_sign_in(ayla_client)
-
-        # Step 2: Ayla token_sign_in exchange
         login_data = self._login_data
         login_url = f"{EU_LOGIN_URL if self.europe else LOGIN_URL}/api/v1/token_sign_in"
         async with ayla_client.post(
@@ -335,6 +361,95 @@ class AylaApi:
                 login_json = {"errors": await r2.text()}
             self._set_credentials(r2.status, login_json)
         return self._access_token
+
+    async def async_sign_in(self):
+        """
+        Authenticate to Ayla API asynchronously.
+
+        Attempts password grant first, then automatically falls back to the legacy cookie-based Auth0 flow.
+        """
+        ayla_client = await self.ensure_session()
+
+        try:
+            await self._password_grant_sign_in(ayla_client)
+        except SharkIqAuthError as err:
+            if self._requires_interactive_login:
+                # Auth0 explicitly requires interactive verification; bubble up so caller can start interactive flow.
+                raise
+            # Password grant failed; try legacy flow (will raise if it also fails)
+            await self._legacy_cookie_sign_in(ayla_client)
+        except Exception:
+            # Unknown failure in password grant; try legacy flow.
+            await self._legacy_cookie_sign_in(ayla_client)
+
+        # Step 2: Ayla token_sign_in exchange
+        return await self._ayla_token_sign_in(ayla_client)
+
+    def start_interactive_login(self) -> Dict[str, str]:
+        """
+        Build an Auth0 authorize URL using PKCE for interactive login.
+
+        Returns:
+            Dict with 'url', 'state', and 'code_verifier'. Caller should persist state/verifier until callback completes.
+        """
+        verifier, challenge = self._generate_pkce_pair()
+        self._last_pkce_verifier = verifier
+        state = secrets.token_urlsafe(32)
+        auth_domain = EU_AUTH0_URL if self.europe else AUTH0_URL
+        client_id = EU_AUTH0_CLIENT_ID if self.europe else AUTH0_CLIENT_ID
+        params = {
+            "response_type": "code",
+            "code_challenge_method": "S256",
+            "code_challenge": challenge,
+            "client_id": client_id,
+            "redirect_uri": AUTH0_REDIRECT_URI,
+            "scope": AUTH0_SCOPES,
+            "state": state,
+            "prompt": "login",
+        }
+        url = f"{auth_domain}/authorize?{urllib.parse.urlencode(params)}"
+        return {"url": url, "state": state, "code_verifier": verifier}
+
+    async def complete_interactive_login(self, code: str, code_verifier: Optional[str] = None):
+        """
+        Complete an interactive Auth0 login by exchanging the returned code.
+        Sets internal tokens and signs in to Ayla.
+        """
+        ayla_client = await self.ensure_session()
+        token_url = EU_AUTH0_TOKEN_URL if self.europe else AUTH0_TOKEN_URL
+        client_id = EU_AUTH0_CLIENT_ID if self.europe else AUTH0_CLIENT_ID
+        verifier = code_verifier or self._last_pkce_verifier
+        if verifier is None:
+            raise SharkIqAuthError("Missing PKCE verifier for interactive login")
+        payload = {
+            "grant_type": "authorization_code",
+            "client_id": client_id,
+            "code_verifier": verifier,
+            "code": code,
+            "redirect_uri": AUTH0_REDIRECT_URI,
+        }
+        async with ayla_client.post(
+            token_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            ssl=self.verify_ssl,
+            timeout=15,
+        ) as resp:
+            raw_text = await resp.text()
+            try:
+                token_json = json.loads(raw_text)
+            except Exception:
+                token_json = None
+            if resp.status >= 400:
+                raise SharkIqAuthError(f"Auth0 interactive code exchange failed: {resp.status} {raw_text}")
+        if not token_json or "id_token" not in token_json:
+            raise SharkIqAuthError("Auth0 interactive response missing id_token")
+        self._auth0_id_token = token_json["id_token"]
+        # Optionally cache refresh_token from interactive login for future use.
+        self._auth0_refresh_token = token_json.get("refresh_token")
+        self._requires_interactive_login = False
+
+        return await self._ayla_token_sign_in(ayla_client)
 
 
     async def async_refresh_auth(self):
@@ -397,6 +512,13 @@ class AylaApi:
             raise SharkIqNotAuthedError("Invalid state.  Please reauthorize.")
         else:
             return self._auth_expiration
+
+    @property
+    def requires_interactive_login(self) -> bool:
+        """
+        True if Auth0 sign-in was flagged as requiring interactive verification.
+        """
+        return self._requires_interactive_login
 
     @property
     def token_expired(self) -> bool:
