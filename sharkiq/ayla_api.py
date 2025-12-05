@@ -54,6 +54,7 @@ def get_ayla_api(
     websession: Optional[aiohttp.ClientSession] = None,
     europe: bool = False,
     verify_ssl: bool = True,
+    auth0_refresh_token: Optional[str] = None,
 ):
     """
     Get an AylaApi object.
@@ -77,6 +78,7 @@ def get_ayla_api(
             websession=websession,
             europe=europe,
             verify_ssl=verify_ssl,
+            auth0_refresh_token=auth0_refresh_token,
         )
     else:
         return AylaApi(
@@ -87,6 +89,7 @@ def get_ayla_api(
             SHARK_APP_SECRET,
             websession=websession,
             verify_ssl=verify_ssl,
+            auth0_refresh_token=auth0_refresh_token,
         )
 
 
@@ -102,7 +105,8 @@ class AylaApi:
             app_secret: str,
             websession: Optional[aiohttp.ClientSession] = None,
             europe: bool = False,
-            verify_ssl: bool = True):
+            verify_ssl: bool = True,
+            auth0_refresh_token: Optional[str] = None):
         """
         Initialize the AylaApi object.
 
@@ -132,7 +136,7 @@ class AylaApi:
         self._requires_interactive_login = False
         # Persist a PKCE verifier for interactive flows if needed.
         self._last_pkce_verifier = None
-        self._auth0_refresh_token = None  # type: Optional[str]
+        self._auth0_refresh_token = auth0_refresh_token  # type: Optional[str]
 
     async def ensure_session(self) -> aiohttp.ClientSession:
         """
@@ -308,6 +312,9 @@ class AylaApi:
             raise SharkIqAuthError("Auth0 response missing id_token")
         self._requires_interactive_login = False
         self._set_id_token(resp.status, auth0_json)
+        # Capture refresh token if provided.
+        if auth0_json.get("refresh_token"):
+            self._auth0_refresh_token = auth0_json.get("refresh_token")
 
     async def _legacy_cookie_sign_in(self, ayla_client: aiohttp.ClientSession, force_auth0_sdk: bool = False):
         """
@@ -370,20 +377,67 @@ class AylaApi:
         """
         ayla_client = await self.ensure_session()
 
+        # If we already have an Auth0 refresh token, try to use it first.
+        if self._auth0_refresh_token:
+            try:
+                await self._auth0_refresh_sign_in(ayla_client)
+                return await self._ayla_token_sign_in(ayla_client)
+            except SharkIqAuthError:
+                # Fall back to normal flows
+                pass
+
         try:
             await self._password_grant_sign_in(ayla_client)
         except SharkIqAuthError as err:
             if self._requires_interactive_login:
-                # Auth0 explicitly requires interactive verification; bubble up so caller can start interactive flow.
-                raise
-            # Password grant failed; try legacy flow (will raise if it also fails)
-            await self._legacy_cookie_sign_in(ayla_client)
+                # Password grant was challenged; try legacy flow before forcing interactive.
+                try:
+                    await self._legacy_cookie_sign_in(ayla_client)
+                    self._requires_interactive_login = False
+                except SharkIqAuthError:
+                    # Still needs interactive verification; bubble up.
+                    raise err
+            else:
+                # Password grant failed; try legacy flow (will raise if it also fails)
+                await self._legacy_cookie_sign_in(ayla_client)
         except Exception:
             # Unknown failure in password grant; try legacy flow.
             await self._legacy_cookie_sign_in(ayla_client)
 
         # Step 2: Ayla token_sign_in exchange
         return await self._ayla_token_sign_in(ayla_client)
+
+    async def _auth0_refresh_sign_in(self, ayla_client: aiohttp.ClientSession):
+        """
+        Attempt Auth0 refresh_token grant to obtain a new id_token.
+        """
+        token_url = EU_AUTH0_TOKEN_URL if self.europe else AUTH0_TOKEN_URL
+        payload = {
+            "grant_type": "refresh_token",
+            "client_id": EU_AUTH0_CLIENT_ID if self.europe else AUTH0_CLIENT_ID,
+            "refresh_token": self._auth0_refresh_token,
+        }
+        async with ayla_client.post(
+            token_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            ssl=self.verify_ssl,
+            timeout=15,
+        ) as resp:
+            raw_text = await resp.text()
+            try:
+                token_json = json.loads(raw_text)
+            except Exception:
+                token_json = None
+            if resp.status >= 400:
+                raise SharkIqAuthError(f"Auth0 refresh_token grant failed: {resp.status} {raw_text}")
+        if not token_json or "id_token" not in token_json:
+            raise SharkIqAuthError("Auth0 refresh_token response missing id_token")
+        # Update refresh token if rotated
+        if token_json.get("refresh_token"):
+            self._auth0_refresh_token = token_json.get("refresh_token")
+        self._requires_interactive_login = False
+        self._auth0_id_token = token_json["id_token"]
 
     def start_interactive_login(self) -> Dict[str, str]:
         """
@@ -446,7 +500,8 @@ class AylaApi:
             raise SharkIqAuthError("Auth0 interactive response missing id_token")
         self._auth0_id_token = token_json["id_token"]
         # Optionally cache refresh_token from interactive login for future use.
-        self._auth0_refresh_token = token_json.get("refresh_token")
+        if token_json.get("refresh_token"):
+            self._auth0_refresh_token = token_json.get("refresh_token")
         self._requires_interactive_login = False
 
         return await self._ayla_token_sign_in(ayla_client)
@@ -519,6 +574,13 @@ class AylaApi:
         True if Auth0 sign-in was flagged as requiring interactive verification.
         """
         return self._requires_interactive_login
+
+    @property
+    def auth0_refresh_token(self) -> Optional[str]:
+        """
+        Return cached Auth0 refresh token if available.
+        """
+        return self._auth0_refresh_token
 
     @property
     def token_expired(self) -> bool:

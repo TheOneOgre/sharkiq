@@ -5,6 +5,8 @@ AUTH0_CLIENT_ID = "wsguxrqm77mq4LtrTrwg8ZJUxmSrexGi"
 AUTH0_SCOPES = "openid profile email offline_access"
 AUTH0_REDIRECT_URI = "com.sharkninja.shark://login.sharkninja.com/ios/com.sharkninja.shark/callback"
 AUTH0_TOKEN_URL = "https://login.sharkninja.com/oauth/token"
+# Config key used to persist Auth0 refresh token from interactive login.
+AUTH0_REFRESH_TOKEN_KEY = "auth0_refresh_token"
 DEVICE_URL = "https://ads-sharkue1.aylanetworks.com"
 LOGIN_URL = "https://user-sharkue1.aylanetworks.com"
 SHARK_APP_ID = "ios_shark_prod-3A-id"

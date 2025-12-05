@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from sharkiq import OperatingModes, PowerModes, Properties, SharkIqVacuum
+from .sharkiq import OperatingModes, PowerModes, Properties, SharkIqVacuum
 import voluptuous as vol
 
 from homeassistant.components.vacuum import (

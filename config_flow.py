@@ -22,6 +22,7 @@ from .const import (
     SHARKIQ_REGION_DEFAULT,
     SHARKIQ_REGION_EUROPE,
     SHARKIQ_REGION_OPTIONS,
+    AUTH0_REFRESH_TOKEN_KEY,
 )
 from .sharkiq import SharkIqAuthError, get_ayla_api
 
@@ -54,6 +55,7 @@ async def _validate_input(
         password=data[CONF_PASSWORD],
         websession=new_websession,
         europe=(data[CONF_REGION] == SHARKIQ_REGION_EUROPE),
+        auth0_refresh_token=data.get(AUTH0_REFRESH_TOKEN_KEY),
     )
 
     if data.get("force_interactive_debug"):
@@ -89,8 +91,10 @@ async def _validate_input(
             "An unknown error occurred. Check your region settings and open an issue on Github if the issue persists."
         ) from error
 
-    # Return info that you want to store in the config entry.
-    return {"title": data[CONF_USERNAME]}
+    entry = {"title": data[CONF_USERNAME]}
+    if getattr(ayla_api, "auth0_refresh_token", None):
+        entry[AUTH0_REFRESH_TOKEN_KEY] = ayla_api.auth0_refresh_token
+    return entry
 
 
 class SharkIqConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -138,6 +142,10 @@ class SharkIqConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(user_input[CONF_USERNAME])
                 self._abort_if_unique_id_configured()
                 data = dict(user_input)
+                # Persist any refresh token collected during validation.
+                rt = info.get(AUTH0_REFRESH_TOKEN_KEY)
+                if rt:
+                    data[AUTH0_REFRESH_TOKEN_KEY] = rt
                 data.pop("force_interactive_debug", None)
                 return self.async_create_entry(title=info["title"], data=data)
             if errors.get("base") == "interactive_required" and self._pending_auth_flow:
@@ -167,6 +175,9 @@ class SharkIqConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors = {"base": "unknown"}
                 if entry := await self.async_set_unique_id(self.unique_id):
                     data = dict(user_input)
+                    rt = data.get(AUTH0_REFRESH_TOKEN_KEY)
+                    if rt:
+                        data[AUTH0_REFRESH_TOKEN_KEY] = rt
                     data.pop("force_interactive_debug", None)
                     self.hass.config_entries.async_update_entry(entry, data=data)
                     return self.async_abort(reason="reauth_successful")
@@ -239,6 +250,9 @@ class SharkIqConfigFlow(ConfigFlow, domain=DOMAIN):
                     self._abort_if_unique_id_configured()
                     data = dict(self._pending_user_input)
                     data.pop("auth_url", None)
+                    rt = getattr(ayla_api, "auth0_refresh_token", None)
+                    if rt:
+                        data[AUTH0_REFRESH_TOKEN_KEY] = rt
                     data.pop("force_interactive_debug", None)
                     return self.async_create_entry(
                         title=self._pending_user_input[CONF_USERNAME], data=data
