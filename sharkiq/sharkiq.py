@@ -4,17 +4,13 @@ import base64
 import enum
 import logging
 import requests
+import json
 from collections import abc, defaultdict
 from datetime import datetime
 from pprint import pformat
 from typing import Any, Dict, Iterable, List, Optional, Set, Union, TYPE_CHECKING
 from .const import DEVICE_URL, EU_DEVICE_URL
 from .exc import SharkIqReadOnlyPropertyError
-
-try:
-    import json as json
-except ImportError:
-    import json
 
 if TYPE_CHECKING:
     from .ayla_api import AylaApi
