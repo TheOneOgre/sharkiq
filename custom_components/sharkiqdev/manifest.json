@@ -1,0 +1,11 @@
+{
+  "domain": "sharkiqdev",
+  "name": "Shark IQ Dev",
+  "version": "0.0.1",
+  "codeowners": ["@JeffResc", "@funkybunch", "@TheOneOgre"],
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/sharkiq",
+  "iot_class": "cloud_polling",
+  "loggers": ["sharkiqdev"],
+  "requirements": []
+}

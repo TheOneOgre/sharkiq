@@ -1,0 +1,1 @@
+This is a custom HACS repo for testing extremely new code for sharkiq
