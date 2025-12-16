@@ -115,6 +115,8 @@ class Properties(enum.Enum):
     ROBOT_FIRMWARE_VERSION = "Robot_Firmware_Version"
     ROBOT_ROOM_LIST = "Robot_Room_List"
     RSSI = "RSSI"
+    OPERATIONAL_ERROR_LOG = "Operational_Error_Log"
+    EXTENDED_ERROR_CODE = "Extended_Error_Code"
 
 
 ERROR_MESSAGES = {
@@ -166,6 +168,7 @@ class SharkIqVacuum:
             europe: True if the account is registered in Europe.
         """
         self.ayla_api = ayla_api
+        self._raw_device = device_dct  # keep original payload for debugging
         self._dsn = device_dct['dsn']
         self._key = device_dct['key']
         self._oem_model_number = device_dct['oem_model']  # type: str
@@ -179,6 +182,7 @@ class SharkIqVacuum:
         # Properties
         self._name = device_dct['product_name']
         self._error = None
+        self._connection_status = device_dct.get('connection_status')
 
     @property
     def oem_model_number(self) -> str:
@@ -219,6 +223,30 @@ class SharkIqVacuum:
             The vacuum name.
         """
         return self._name
+
+    @property
+    def raw_device(self) -> Dict:
+        """Raw device payload from Ayla (for debugging)."""
+        return self._raw_device
+
+    @property
+    def connection_status(self) -> Optional[str]:
+        """
+        Raw connection status as reported by the API (e.g. 'Online' / 'Offline').
+        """
+        return self._connection_status
+
+    @property
+    def is_online(self) -> bool:
+        """
+        Convenience flag indicating whether the device is online.
+        """
+        if self._connection_status is None:
+            # API did not report a status; assume online so we don't hide the entity.
+            return True
+        if isinstance(self._connection_status, str):
+            return self._connection_status.lower() == 'online'
+        return bool(self._connection_status)
 
     @property
     def serial_number(self) -> str:

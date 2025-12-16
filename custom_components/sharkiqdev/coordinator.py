@@ -17,7 +17,7 @@ from .const import (
     SHARKIQ_REGION_EUROPE,
     UPDATE_INTERVAL,
 )
-from .sharkiq import SharkIqAuthError, SharkIqVacuum, get_ayla_api
+from .sharkiq import Properties, SharkIqAuthError, SharkIqVacuum, get_ayla_api
 
 
 class SharkIqUpdateCoordinator(DataUpdateCoordinator[Dict[str, SharkIqVacuum]]):
@@ -32,6 +32,7 @@ class SharkIqUpdateCoordinator(DataUpdateCoordinator[Dict[str, SharkIqVacuum]]):
             update_interval=UPDATE_INTERVAL,
         )
         self.entry = entry
+        self.shark_vacs: Dict[str, SharkIqVacuum] = {}
         self._ayla_api = None
         self._region_eu = entry.data.get(CONF_REGION) == SHARKIQ_REGION_EUROPE
 
@@ -63,4 +64,39 @@ class SharkIqUpdateCoordinator(DataUpdateCoordinator[Dict[str, SharkIqVacuum]]):
         # Return devices keyed by serial for easy lookups.
         # Cache for platform access
         self.shark_vacs = {device.serial_number: device for device in devices}
+
+        def _mask_sn(sn: str) -> str:
+            # Hide most of the serial for logs
+            if not sn or len(sn) < 4:
+                return "***"
+            return f"{sn[:2]}***{sn[-2:]}"
+
+        for device in devices:
+            LOGGER.debug(
+                "Device %s (%s) product=%s oem_model=%s connection_status=%s error_code=%s properties=%s",
+                device.name,
+                _mask_sn(device.serial_number),
+                device.name,
+                device.oem_model_number,
+                getattr(device, "connection_status", "unknown"),
+                device.error_code,
+                ", ".join(sorted(device.properties_full.keys())),
+            )
+
         return self.shark_vacs
+
+    def device_is_online(self, serial_number: str) -> bool:
+        """Return True if the device is online, False otherwise."""
+        device = self.shark_vacs.get(serial_number)
+        if device is None:
+            LOGGER.debug(
+                "Requested online status for unknown Shark IQ device %s", serial_number
+            )
+            return False
+
+        # SharkIqVacuum exposes connection_status if the API provides it.
+        if hasattr(device, "is_online"):
+            return device.is_online
+
+        # If the API did not tell us, assume online so we do not hide the entity.
+        return True
