@@ -33,7 +33,7 @@ class FallbackAuth:
     + '&client_id=' + FallbackAuth.urlEncode(AUTH0_CLIENT_ID)
     + '&state=' + FallbackAuth.urlEncode(state)
     + '&scope=' + FallbackAuth.urlEncode(AUTH0_SCOPES)
-    + '&redirect_uri=' + FallbackAuth.urlEncode(AUTH0_REDIRECT_URI)
+    + '&redirect_=' + FallbackAuth.urlEncode(AUTH0_REDIRECT_URI)
     + '&code_challenge=' + FallbackAuth.urlEncode(challenge)
     + '&screen_hint=signin'
     + '&code_challenge_method=S256'
