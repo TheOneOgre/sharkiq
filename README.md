@@ -12,14 +12,13 @@ This repository is a **custom HACS source** used for testing very new and experi
 
    - Repository: `https://github.com/TheOneOgre/sharkiq`  
    - Category: **Integration**  
-   - Name: **Sharkiq Dev**
 
 4. Find **Sharkiq Dev** in HACS and install the latest release
 5. **Restart Home Assistant**
 6. Go to **Settings** → **Devices & services** → **Add Integration**
 7. Search for and install: **Sharkiq Dev**
 
-If you encounter any issues during install or setup, please report them on **issue #141**.
+If you encounter any issues during install or setup, please report them on 'https://github.com/sharkiqlibs/sharkiq/issues/141'.
 
 ---
 
