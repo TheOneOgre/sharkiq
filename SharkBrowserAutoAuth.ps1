@@ -1,11 +1,10 @@
-# Shark OAuth One-Shot Capture (wait mode)
+# Shark OAuth One-Shot Capture (wait mode, terminal UI)
 # - Registers com.sharkninja.shark protocol handler under HKCU (current user)
 # - Waits for redirect to trigger handler
-# - Extracts code/state, copies FULL redirect URL to clipboard, shows popup
+# - Copies FULL redirect URL to clipboard, prints it to terminal
 # - Cleans up registry + temp files (no permanent changes)
 
 $ErrorActionPreference = "Stop"
-Add-Type -AssemblyName System.Windows.Forms | Out-Null
 
 $proto   = "com.sharkninja.shark"
 $root    = "HKCU:\Software\Classes\$proto"
@@ -15,9 +14,6 @@ New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 $captureFile = Join-Path $tmpDir "captured_url.txt"
 $handlerPs1  = Join-Path $tmpDir "handler.ps1"
 
-# ----------------------------
-# CHANGED: handler now takes (capturePath, url) args
-# ----------------------------
 @'
 param(
   [string]$capturePath,
@@ -36,24 +32,9 @@ function Cleanup {
   try { Remove-Item -Path $tmpDir -Recurse -Force -ErrorAction SilentlyContinue } catch {}
 }
 
-function Extract-CodeState([string]$capturedUrl) {
-  $code = $null; $state = $null
-  try {
-    $uri = [Uri]$capturedUrl
-    $q = $uri.Query.TrimStart('?')
-    $pairs = $q.Split('&') | Where-Object { $_ -match '=' }
-    $kv = @{}
-    foreach ($p in $pairs) {
-      $k,$v = $p.Split('=',2)
-      $kv[[Uri]::UnescapeDataString($k)] = [Uri]::UnescapeDataString($v)
-    }
-    $code  = $kv["code"]
-    $state = $kv["state"]
-  } catch {}
-  return @($code, $state)
-}
-
 try {
+  Write-Host "Shark OAuth One-Shot: setting up temporary protocol handler..." -ForegroundColor Cyan
+
   # Ensure capture file doesn't exist
   Remove-Item -Path $captureFile -Force -ErrorAction SilentlyContinue
 
@@ -62,17 +43,17 @@ try {
   Set-ItemProperty -Path $root -Name "(default)" -Value "URL:$proto Protocol" | Out-Null
   New-ItemProperty -Path $root -Name "URL Protocol" -Value "" -Force | Out-Null
 
-  # ----------------------------
-  # CHANGED: pass captureFile + %1 directly; no env vars
-  # ----------------------------
+  # Protocol launch command -> writes captured URL into $captureFile
   $cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$handlerPs1`" `"$captureFile`" `"%1`""
   Set-ItemProperty -Path "$root\shell\open\command" -Name "(default)" -Value $cmd | Out-Null
 
-  # Tell user what to do next
-  [System.Windows.Forms.MessageBox]::Show(
-    "Ready.`n`nNow go back to Home Assistant and click the Shark login link.`n`nThis helper will wait for the redirect and then show/copy the code.",
-    "Shark OAuth One-Shot"
-  ) | Out-Null
+  Write-Host ""
+  Write-Host "READY." -ForegroundColor Green
+  Write-Host "1) Go back to Home Assistant" -ForegroundColor Gray
+  Write-Host "2) Click the Shark login link" -ForegroundColor Gray
+  Write-Host "3) After login, this window will print + copy the redirect URL" -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "Waiting for redirect..." -ForegroundColor Yellow
 
   # Wait up to 10 minutes for redirect
   $deadline = (Get-Date).AddMinutes(10)
@@ -82,50 +63,37 @@ try {
   }
 
   if (!(Test-Path $captureFile)) {
-    [System.Windows.Forms.MessageBox]::Show(
-      "Timed out waiting for the redirect.`n`nIf you completed login but nothing was captured, your system may be opening a Shark app (or another handler) instead of this temporary one.",
-      "Shark OAuth One-Shot"
-    ) | Out-Null
+    Write-Host ""
+    Write-Host "Timed out waiting for the redirect." -ForegroundColor Red
+    Write-Host "If you completed login but nothing was captured, your system may be opening a Shark app or another handler instead." -ForegroundColor Red
     exit 1
   }
 
   $captured = (Get-Content -Path $captureFile -Raw).Trim().Trim('"')
-  $code, $state = Extract-CodeState $captured
 
-  # Always copy full URL (what your integration expects)
-  Set-Clipboard -Value $captured
+  Write-Host ""
+  Write-Host "CAPTURED ✅  (copied to clipboard)" -ForegroundColor Green
 
-  $codeQuery = if ($code) { "?code=$code" } else { $null }
-
-  if ($code) {
-    $msg = @"
-✅ Captured redirect URL (copied to clipboard):
-
-$captured
-
-If Home Assistant expects only the code query, paste this instead:
-
-$codeQuery
-
-Click OK to clean up.
-"@
-  } else {
-    $msg = @"
-✅ Captured redirect URL (copied to clipboard):
-
-$captured
-
-No 'code=' was found in the query string.
-Click OK to clean up.
-"@
+  try {
+    Set-Clipboard -Value $captured
+  } catch {
+    Write-Host "Warning: failed to copy to clipboard: $($_.Exception.Message)" -ForegroundColor DarkYellow
   }
 
-  [System.Windows.Forms.MessageBox]::Show($msg, "Shark OAuth One-Shot") | Out-Null
+  Write-Host ""
+  Write-Host "Paste this into Home Assistant:" -ForegroundColor Cyan
+  Write-Host $captured -ForegroundColor White
+  Write-Host ""
+
+  # Optional: keep window open a moment so users see it even if launched from a one-liner
+  Write-Host "Cleaning up temporary handler..." -ForegroundColor Gray
 }
 catch {
-  [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Shark OAuth One-Shot") | Out-Null
+  Write-Host ""
+  Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
   exit 1
 }
 finally {
   Cleanup
+  Write-Host "Done. You can close this window." -ForegroundColor Gray
 }
