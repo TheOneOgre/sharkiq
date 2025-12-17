@@ -1,7 +1,7 @@
 # Shark OAuth One-Shot Capture (wait mode)
 # - Registers com.sharkninja.shark protocol handler under HKCU (current user)
 # - Waits for redirect to trigger handler
-# - Extracts code/state, copies code to clipboard, shows popup
+# - Extracts code/state, copies FULL redirect URL to clipboard, shows popup
 # - Cleans up registry + temp files (no permanent changes)
 
 $ErrorActionPreference = "Stop"
@@ -15,12 +15,19 @@ New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 $captureFile = Join-Path $tmpDir "captured_url.txt"
 $handlerPs1  = Join-Path $tmpDir "handler.ps1"
 
+# ----------------------------
+# CHANGED: handler now takes (capturePath, url) args
+# ----------------------------
 @'
-param([string]$url)
+param(
+  [string]$capturePath,
+  [string]$url
+)
 try {
   if ($url) { $url = $url.Trim('"') }
-  $out = $env:SHARK_OAUTH_CAPTURE_FILE
-  if ($out) { Set-Content -Path $out -Value $url -Encoding UTF8 -Force }
+  if ($capturePath) {
+    Set-Content -Path $capturePath -Value $url -Encoding UTF8 -Force
+  }
 } catch { }
 '@ | Set-Content -Path $handlerPs1 -Encoding UTF8 -Force
 
@@ -55,8 +62,10 @@ try {
   Set-ItemProperty -Path $root -Name "(default)" -Value "URL:$proto Protocol" | Out-Null
   New-ItemProperty -Path $root -Name "URL Protocol" -Value "" -Force | Out-Null
 
-  # Protocol launch command -> writes captured URL into $captureFile
-  $cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"& { `$env:SHARK_OAUTH_CAPTURE_FILE='$captureFile'; & '$handlerPs1' '%1' }`""
+  # ----------------------------
+  # CHANGED: pass captureFile + %1 directly; no env vars
+  # ----------------------------
+  $cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$handlerPs1`" `"$captureFile`" `"%1`""
   Set-ItemProperty -Path "$root\shell\open\command" -Name "(default)" -Value $cmd | Out-Null
 
   # Tell user what to do next
@@ -82,14 +91,14 @@ try {
 
   $captured = (Get-Content -Path $captureFile -Raw).Trim().Trim('"')
   $code, $state = Extract-CodeState $captured
-  
-Set-Clipboard -Value $captured
 
+  # Always copy full URL (what your integration expects)
+  Set-Clipboard -Value $captured
 
-$codeQuery = if ($code) { "?code=$code" } else { $null }
+  $codeQuery = if ($code) { "?code=$code" } else { $null }
 
-if ($code) {
-  $msg = @"
+  if ($code) {
+    $msg = @"
 ✅ Captured redirect URL (copied to clipboard):
 
 $captured
@@ -100,8 +109,8 @@ $codeQuery
 
 Click OK to clean up.
 "@
-} else {
-  $msg = @"
+  } else {
+    $msg = @"
 ✅ Captured redirect URL (copied to clipboard):
 
 $captured
@@ -109,10 +118,9 @@ $captured
 No 'code=' was found in the query string.
 Click OK to clean up.
 "@
-}
+  }
 
-[System.Windows.Forms.MessageBox]::Show($msg, "Shark OAuth One-Shot") | Out-Null
-
+  [System.Windows.Forms.MessageBox]::Show($msg, "Shark OAuth One-Shot") | Out-Null
 }
 catch {
   [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Shark OAuth One-Shot") | Out-Null
