@@ -82,16 +82,37 @@ try {
 
   $captured = (Get-Content -Path $captureFile -Raw).Trim().Trim('"')
   $code, $state = Extract-CodeState $captured
+  
+Set-Clipboard -Value $captured
 
-  if ($code) {
-    Set-Clipboard -Value $code
-    $msg = "✅ Captured auth code (copied to clipboard):`n`n$code`n`nState: $state`n`nPaste the code into Home Assistant, then click OK to clean up."
-  } else {
-    Set-Clipboard -Value $captured
-    $msg = "✅ Captured redirect URL (copied to clipboard):`n`n$captured`n`nNo 'code=' found. Paste the URL into Home Assistant, then click OK to clean up."
-  }
 
-  [System.Windows.Forms.MessageBox]::Show($msg, "Shark OAuth One-Shot") | Out-Null
+$codeQuery = if ($code) { "?code=$code" } else { $null }
+
+if ($code) {
+  $msg = @"
+✅ Captured redirect URL (copied to clipboard):
+
+$captured
+
+If Home Assistant expects only the code query, paste this instead:
+
+$codeQuery
+
+Click OK to clean up.
+"@
+} else {
+  $msg = @"
+✅ Captured redirect URL (copied to clipboard):
+
+$captured
+
+No 'code=' was found in the query string.
+Click OK to clean up.
+"@
+}
+
+[System.Windows.Forms.MessageBox]::Show($msg, "Shark OAuth One-Shot") | Out-Null
+
 }
 catch {
   [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Shark OAuth One-Shot") | Out-Null
