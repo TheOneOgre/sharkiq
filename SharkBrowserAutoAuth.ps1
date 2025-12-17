@@ -97,3 +97,4 @@ finally {
   Cleanup
   Write-Host "Done. You can close this window." -ForegroundColor Gray
 }
+Read-Host "Press Enter to exit"
